@@ -1,0 +1,12 @@
+{
+  "name": "mobile-cicd-skill",
+  "description": "Claude skills for shipping mobile apps: CI/CD on GitHub Actions to the App Store and Google Play.",
+  "owner": { "name": "The mobile-cicd authors" },
+  "plugins": [
+    {
+      "name": "mobile-cicd",
+      "source": "./",
+      "description": "Complete GitHub Actions CI/CD for Capacitor, Expo and React Native apps, with tag-driven App Store and Google Play releases."
+    }
+  ]
+}
