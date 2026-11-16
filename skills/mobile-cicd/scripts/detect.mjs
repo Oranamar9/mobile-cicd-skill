@@ -139,12 +139,19 @@ if (!ci.lint && !ci.typecheck && !ci.test) warnings.push('No lint, typecheck or 
 
 let web;
 if (framework === 'capacitor') {
-  if (scripts.build) {
-    ci.build = run('build');
-    web = { buildCommand: run('build') };
-  } else {
-    web = { buildCommand: null };
-    questions.push('Capacitor needs a web build before `cap sync`, but package.json has no build script. What command builds the web app?');
+  // `cap sync` copies webDir into the native projects, so the release needs the build that
+  // produces webDir. Apps that are also a website often keep that in a separate script.
+  const capText = ['capacitor.config.ts', 'capacitor.config.js', 'capacitor.config.mjs', 'capacitor.config.json'].map(read).find(Boolean) ?? '';
+  const webDir = capText.match(/webDir["']?\s*:\s*['"`]([^'"`]+)/)?.[1] ?? 'www';
+  const mobileBuild = firstScript('build:mobile', 'mobile:build', 'build:cap', 'build:capacitor', 'cap:build', 'build:native', 'build:app');
+  if (scripts.build) ci.build = run('build');
+  const buildScript = mobileBuild ?? (scripts.build ? 'build' : null);
+  web = { buildCommand: buildScript ? run(buildScript) : null, webDir };
+  const ssr = ['@tanstack/react-start', '@tanstack/start', 'next', 'nuxt', 'nitropack', '@remix-run/dev', '@sveltejs/kit', 'astro'].find((d) => deps[d]);
+  if (!buildScript) {
+    questions.push(`Capacitor copies ${webDir}/ into the native projects, but package.json has no build script. What command builds it?`);
+  } else if (!mobileBuild && ssr) {
+    questions.push(`The app uses ${ssr}, so \`${run('build')}\` may build the website rather than ${webDir}/, which Capacitor copies into the app. Which command produces ${webDir}/? (Set web.buildCommand.)`);
   }
 }
 
@@ -373,6 +380,7 @@ const summary = {
   androidPackage: packageName,
   xcode: `${ios.workspace ?? ios.xcodeproj} (scheme ${ios.scheme})`,
   ciSteps: Object.entries(ci).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`),
+  ...(web ? { mobileWebBuild: `${web.buildCommand ?? '?'} -> ${web.webDir}/` } : {}),
   buildEnv: env ? `${env.file} -> secret ${env.secret} (${env.required.length} variables read in code)` : 'none',
   firebaseFromSecrets: [fbIos, fbAndroid].filter(Boolean),
 };

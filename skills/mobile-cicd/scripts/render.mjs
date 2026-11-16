@@ -231,6 +231,38 @@ export function deriveVars(c) {
   };
 }
 
+// A project that runs `prettier --check .` (directly or through eslint-plugin-prettier) would
+// fail on the generated files, which follow their own formatting. They are re-rendered rather
+// than hand-edited, so they go in .prettierignore, in a block of their own.
+const PRETTIER_BLOCK_START = '# mobile-cicd: generated files, re-rendered from .github/mobile-cicd/config.json';
+const PRETTIER_BLOCK = [
+  PRETTIER_BLOCK_START,
+  '.github/workflows/ci.yml',
+  '.github/workflows/security.yml',
+  '.github/workflows/mobile-release.yml',
+  '.github/mobile-cicd/',
+  '# end mobile-cicd',
+].join('\n');
+
+function usesPrettier(root) {
+  const pkgPath = path.join(root, 'package.json');
+  const pkg = fs.existsSync(pkgPath) ? JSON.parse(fs.readFileSync(pkgPath, 'utf8')) : {};
+  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  if (deps.prettier || pkg.prettier) return true;
+  return fs.readdirSync(root).some((f) => /^\.prettier(rc|ignore)|^prettier\.config\./.test(f));
+}
+
+function ensurePrettierIgnore(root, out) {
+  if (!usesPrettier(root)) return null;
+  const file = '.prettierignore';
+  const source = [path.join(out, file), path.join(root, file)].find((f) => fs.existsSync(f));
+  const existing = source ? fs.readFileSync(source, 'utf8') : '';
+  if (existing.includes(PRETTIER_BLOCK_START)) return { status: 'unchanged', file };
+  const text = `${existing}${existing && !existing.endsWith('\n') ? '\n' : ''}${existing ? '\n' : ''}${PRETTIER_BLOCK}\n`;
+  fs.writeFileSync(path.join(out, file), text);
+  return { status: existing ? 'appended' : 'created', file, note: 'generated files kept out of Prettier' };
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || !args.root) {
@@ -286,6 +318,9 @@ function main() {
     if (f.mode) fs.chmodSync(target, f.mode);
     results.push({ status: existing === null ? 'created' : 'replaced', file: f.output });
   }
+
+  const prettier = ensurePrettierIgnore(root, out);
+  if (prettier) results.push(prettier);
 
   for (const r of results) console.log(`${r.status.padEnd(10)}${r.file}${r.note ? `  (${r.note})` : ''}`);
   const left = results.filter((r) => r.status === 'left');

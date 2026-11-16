@@ -123,6 +123,12 @@ Run the checks that are available:
 - `ruby -c fastlane/Fastfile`
 - `bash -n .github/mobile-cicd/setup-secrets.sh`
 - `node --check .github/mobile-cicd/*.mjs`
+- **the project's own lint and format check**, the same commands as `ci.lint` and
+  `ci.format`. The generated `.mjs` files carry `/* eslint-disable */`, and render adds the
+  generated files to `.prettierignore` when the project uses Prettier. Some setups still need a
+  hand edit, such as typed ESLint (`parserOptions.project`) or a lint step that checks YAML. If
+  so, add `.github/mobile-cicd/` and the three workflow files to that tool's ignore list. A CI
+  that fails on its own files on day one is the worst first impression this skill can make.
 
 Then read `mobile-release.yml` once with this app in mind. Check that the prebuild versus
 committed steps, the paths and the scheme make sense.
@@ -132,11 +138,22 @@ Optionally run `set-versions.mjs` locally with a test version, look at the diff,
 
 ### 6. Secrets
 
+First make sure the GitHub CLI is ready. The script itself only reports problems; helping
+fix them is your job here:
+
+- `gh --version`: if it's missing or older than 2.40, offer to install or upgrade it. On macOS
+  with Homebrew that's `brew install gh` / `brew upgrade gh`; elsewhere point to
+  https://github.com/cli/cli#installation. Ask before installing anything.
+- `gh auth status`: if it isn't signed in, ask the user to run `gh auth login` in their own
+  terminal. It opens a browser and uses their GitHub account, so it's theirs to do.
+
+Then check what is already set:
+
 ```bash
 bash .github/mobile-cicd/setup-secrets.sh --check
 ```
 
-This needs `gh auth login` and shows names only. For each missing secret, explain where it
+This shows names only. For each missing secret, explain where it
 comes from, using the matching section of [references/secrets.md](references/secrets.md) and
 only what this user needs. Then give them the command to run in **their own terminal**:
 

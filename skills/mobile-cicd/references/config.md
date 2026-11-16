@@ -22,7 +22,8 @@ drafts it and `render.mjs` validates it. Unknown fields are ignored.
 | --- | --- |
 | `ci.lint`, `ci.format`, `ci.typecheck`, `ci.test`, `ci.build` | Full commands, or `null` to skip. Multi-line values are fine. |
 | `hooks.afterInstall` | Runs after the install in CI and in both release jobs. Use it for build prerequisites, e.g. compiling local Capacitor plugins. |
-| `web.buildCommand` | Capacitor only: the web build that runs before `npx cap sync`. |
+| `web.buildCommand` | Capacitor only: the build that runs before `npx cap sync` and must produce `web.webDir`. Apps that are also a website often have a separate mobile build (`build:mobile`); detect prefers it. |
+| `web.webDir` | Capacitor only, informational: the folder `cap sync` copies (from capacitor.config). |
 
 Project-specific CI jobs that don't fit these steps (database tests, a local Supabase stack, edge
 functions) belong in `ci.yml` as extra jobs. Re-add them after every re-render (or keep the

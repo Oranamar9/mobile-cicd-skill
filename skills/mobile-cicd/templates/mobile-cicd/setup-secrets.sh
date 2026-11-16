@@ -41,8 +41,23 @@ TMP_FILES=()
 cleanup() { if ((${#TMP_FILES[@]})); then rm -f "${TMP_FILES[@]}"; fi; }
 trap cleanup EXIT
 
-command -v gh >/dev/null 2>&1 || die "the GitHub CLI is needed: https://cli.github.com"
-gh auth status >/dev/null 2>&1 || die "sign in to GitHub first: gh auth login"
+# The GitHub CLI: present, recent enough, signed in. This script never installs anything; it
+# says exactly what to run instead.
+MIN_GH="2.40.0"
+gh_install_hint() {
+  if [[ "$(uname -s)" == Darwin ]] && command -v brew >/dev/null 2>&1; then echo "brew $1 gh"
+  elif [[ "$(uname -s)" == Darwin ]]; then echo "install Homebrew (https://brew.sh), then: brew install gh. Or download it from https://cli.github.com"
+  else echo "see https://github.com/cli/cli#installation"; fi
+}
+version_number() { local IFS=.; set -- $1; printf '%d%04d%04d' "$((10#${1:-0}))" "$((10#${2:-0}))" "$((10#${3:-0}))"; }
+if ! command -v gh >/dev/null 2>&1; then
+  die "the GitHub CLI (gh) is not installed. Install it: $(gh_install_hint install)"
+fi
+GH_VERSION="$(gh --version 2>/dev/null | sed -n 's/^gh version \([0-9][0-9.]*\).*/\1/p' | head -1)"
+if [[ -z "$GH_VERSION" || "$(version_number "$GH_VERSION")" -lt "$(version_number "$MIN_GH")" ]]; then
+  die "gh ${GH_VERSION:-(unknown version)} is too old; $MIN_GH or newer is needed. Update it: $(gh_install_hint upgrade)"
+fi
+gh auth status >/dev/null 2>&1 || die "gh is not signed in to GitHub. Run: gh auth login   (then run this script again)"
 REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)" || die "run this inside the app's GitHub repo"
 
 EXISTING=""
