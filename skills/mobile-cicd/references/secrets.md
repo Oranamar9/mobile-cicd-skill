@@ -11,6 +11,20 @@ Contents: [App Store Connect API key](#app-store-connect-api-key) ·
 [Build environment](#build-environment) · [Firebase files](#firebase-config-files) ·
 [Rotating](#rotating-a-leaked-secret)
 
+## Where the workflow uses them
+
+| Secret | Job and step | Runs dependency code? |
+| --- | --- | --- |
+| App Store Connect API key | `resolve`, `ios-build` "Prepare signing", `ios-upload`, `ios-submit` | No ("Prepare signing" runs before node is set up) |
+| Distribution certificate, profile | `ios-build` "Prepare signing" | No. The key is imported non-extractable; later build steps can sign with it but not copy it |
+| Android upload key | `android-release` "Sign the bundle" (`jarsigner`, passwords via `:env`) | No: a fresh runner, fastlane and the JDK only |
+| Play service account | `resolve`, `android-release` "Upload to Google Play" | No |
+| Build environment, Firebase files | the build jobs | Yes, by necessity: they ship inside the app |
+
+If the user asks why a step can't just get the secret it needs, this table is the answer: build
+code from any dependency could read it and send it anywhere, and GitHub's log masking doesn't
+stop that.
+
 ## App Store Connect API key
 
 Secrets: `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`,

@@ -27,6 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Runs before anything is installed: the release workflow must keep the store secrets away
+      # from dependency code, out of command lines, and in pinned jobs.
+      - name: Release workflow keeps secrets away from build code
+        run: node .github/mobile-cicd/check-workflow-secrets.mjs
+
 # @if isPnpm
       - uses: pnpm/action-setup@v4
 # @if pnpmVersion

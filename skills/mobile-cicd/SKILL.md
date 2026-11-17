@@ -21,11 +21,12 @@ your environment, use that folder's path.
 | --- | --- |
 | `.github/workflows/ci.yml` | Lint, format, types, tests, build on every push and PR to `main` |
 | `.github/workflows/security.yml` | Gitleaks over the whole history, dependency audit, Semgrep; also weekly |
-| `.github/workflows/mobile-release.yml` | On a `vX.Y.Z` tag that is on `main`: gate, CI and Security again, next build number, then iOS (macOS) and Android (Ubuntu) to production |
+| `.github/workflows/mobile-release.yml` | On a `vX.Y.Z` tag that is on `main`: gate, CI and Security again, next build number, then iOS (macOS) and Android (Ubuntu) to production. Building and signing/uploading are separate jobs, so dependency code never sees a store secret |
 | `fastlane/Fastfile`, `fastlane/Appfile`, `Gemfile` | The build, sign, upload and submit lanes |
 | `.github/mobile-cicd/config.json` | Every setting. The source for re-rendering |
 | `.github/mobile-cicd/set-versions.mjs` | Writes the version and build number into the app during the build |
 | `.github/mobile-cicd/setup-secrets.sh`, `check-store-access.mjs` | Sets and checks the secrets (the user runs it) |
+| `.github/mobile-cicd/check-workflow-secrets.mjs` | Fails CI and the release gate if a workflow edit lets secrets reach dependency code, a command line or a log |
 | `.github/mobile-cicd/README.md` | How to release, the production switches, the one-time setup, fixes |
 
 Design decisions already agreed for this pipeline. Explain them if asked, and don't "fix" them:
@@ -36,9 +37,15 @@ Design decisions already agreed for this pipeline. Explain them if asked, and do
   back to `main`, so it works with branch protection and never collides. The version comes from the tag.
 - **iOS submit runs on a Linux job.** Waiting 5-30 minutes for Apple's processing on macOS
   would be expensive.
-- **Android signing uses Gradle's `android.injected.signing.*` properties.** These are the ones
-  Android Studio uses, so the project's build.gradle needs no signing config. The job checks the
-  bundle's signature against the upload key before uploading.
+- **Store secrets never meet dependency code.** Install scripts, Expo config plugins, CocoaPods
+  and Gradle plugins all run in the build jobs, which get no store secret. Android is built
+  with a throwaway key and re-signed with the upload key by `jarsigner` in `android-release`, a
+  fresh runner that only runs fastlane and the JDK. Uploads to both stores run in jobs of their
+  own. iOS signs inside Xcode, so `ios-build` imports the certificate in "Prepare signing",
+  before any dependency code, as a non-extractable key. Every secret goes to the one step that
+  needs it, actions are pinned to commit SHAs, and passwords go through the environment, never
+  on a command line. Don't move a secret into a job-level `env`, or into a build step, to "fix"
+  a failure: `check-workflow-secrets.mjs` will fail, and it is right to.
 - Switches at the top of `mobile-release.yml`: `IOS_SUBMIT_FOR_REVIEW`, `IOS_AUTOMATIC_RELEASE`,
   `ANDROID_ROLLOUT`.
 
@@ -123,6 +130,10 @@ Run the checks that are available:
 - `ruby -c fastlane/Fastfile`
 - `bash -n .github/mobile-cicd/setup-secrets.sh`
 - `node --check .github/mobile-cicd/*.mjs`
+- `node .github/mobile-cicd/check-workflow-secrets.mjs`, which must pass. Run it again after
+  merging project-specific jobs or steps into the workflows. A secret the project's own build
+  needs (a Sentry token for source maps, say) can go to a build step, but never the store
+  secrets.
 - **the project's own lint and format check**, the same commands as `ci.lint` and
   `ci.format`. The generated `.mjs` files carry `/* eslint-disable */`, and render adds the
   generated files to `.prettierignore` when the project uses Prettier. Some setups still need a

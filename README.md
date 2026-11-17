@@ -59,8 +59,16 @@ git push origin v1.2.3
   and Google Play for the highest build number they've seen and adds one. Nothing is committed
   back, so it works with protected branches and two releases can never collide.
 - **No signing config in your project.** iOS signs with a temporary keychain and manual signing
-  applied at build time. Android gets the upload key through Gradle's `android.injected.signing.*`
-  properties, and the bundle's signature is checked against the upload key before upload.
+  applied at build time. Android is built with a throwaway key through Gradle's
+  `android.injected.signing.*` properties, then re-signed with the upload key and checked before
+  upload.
+- **Store secrets never meet your dependencies.** The jobs that install packages and build (where
+  install scripts, Expo plugins, CocoaPods and Gradle plugins run) get no store secret. Signing
+  and uploading run in separate jobs on fresh runners that only run fastlane and the JDK. iOS
+  imports its certificate before any dependency code runs, as a key that can sign but not be
+  exported. Each secret goes to one step, actions are pinned to commits, and passwords never go
+  on a command line. `check-workflow-secrets.mjs` enforces this in your CI and before every
+  release, so a later edit can't quietly undo it.
 - **Cheap where it can be.** Native builds run only on release. The 5-30 minute wait for Apple's
   processing runs on Linux, not macOS.
 - **Secrets are checked before they're stored.** `.p12` passwords, certificate expiry,
@@ -99,8 +107,9 @@ skills/mobile-cicd/
   SKILL.md                what Claude follows
   scripts/detect.mjs      looks at the app, drafts config.json
   scripts/render.mjs      renders the templates from config.json
-  templates/              workflows, fastlane, setup and version scripts
+  templates/              workflows, fastlane, setup and version scripts, the secret check
   references/             config fields, per-secret guides, store setup, troubleshooting
+tests/                    renders every stack and checks where the secrets can go (npm test)
 ```
 
 Try the scripts without Claude:
@@ -114,8 +123,8 @@ node skills/mobile-cicd/scripts/render.mjs --root /path/to/app --out /tmp/previe
 ## Contributing
 
 Issues and pull requests are welcome, especially Flutter and native support, app extension
-signing, and reports from real releases. Please run `detect.mjs` and `render.mjs` against a
-sample app and include what changed in the generated files.
+signing, and reports from real releases. Please run `npm test`, and run `detect.mjs` and
+`render.mjs` against a sample app and include what changed in the generated files.
 
 ## License
 
