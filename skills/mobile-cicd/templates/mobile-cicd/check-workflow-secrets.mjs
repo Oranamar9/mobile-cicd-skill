@@ -22,7 +22,7 @@
 //                  with store secrets doesn't restore caches dependency code can write.
 //   unpinned       A job with store secrets pins every action to a full commit SHA.
 //
-// Exit codes: 0 no findings, 1 findings, 2 a file could not be read.
+// Exit codes: 0 no findings, 1 findings, 2 no workflow found or a file could not be read.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -322,6 +322,11 @@ function main() {
   if (!files.length) {
     const dir = '.github/workflows';
     files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.ya?ml$/.test(f)).map((f) => path.join(dir, f)) : [];
+    if (!files.length) {
+      // Checking nothing must not look like a pass.
+      console.error(`No workflow files in ${path.resolve(dir)}. Run this from the repository root, or name the files.`);
+      process.exit(2);
+    }
   }
   let findings = [];
   for (const f of files) {
@@ -337,7 +342,18 @@ function main() {
     console.log(`\n${findings.length} problem(s). Rules: node .github/mobile-cicd/check-workflow-secrets.mjs --help`);
     process.exit(1);
   }
-  console.log(`Secrets OK in ${files.length} workflow file(s).`);
+  console.log(`No problems found in ${files.length} workflow file(s): ${files.map((f) => path.basename(f)).join(', ')}`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+// Run main() only when this file is the script node was started with, not when it is imported.
+// Compare real paths: node resolves symlinks in import.meta.url but not in argv[1], so a skill
+// installed as a symlink (~/.claude/skills/mobile-cicd -> ...) would otherwise exit 0 doing nothing.
+function isMain() {
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMain()) main();
