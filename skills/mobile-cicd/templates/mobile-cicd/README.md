@@ -22,8 +22,10 @@ gh run watch
   or Google Play has seen, plus one, so it never collides and nothing is committed back.
 - The tag message is the App Store "What's New" text (a tag without `-a` gets
   "@@release.defaultNotes@@").
-- iOS: the build is uploaded, then a Linux job waits for Apple's processing and submits it for
-  review. Android: the bundle goes to the production track.
+- iOS: `ios-build` builds and signs the `.ipa`, `ios-upload` sends it to App Store Connect, then
+  a Linux job waits for Apple's processing and submits it for review. Android: `android-build`
+  builds the bundle, `android-release` signs it with the upload key and sends it to the
+  production track.
 
 What "production" means is set at the top of `mobile-release.yml`:
 
@@ -56,6 +58,21 @@ files and hidden prompts straight to GitHub; each one is checked first. See what
 | `GOOGLE_SERVICES_JSON` | `@@firebaseAndroid@@` (base64) |
 <!-- @endif -->
 
+### How they are protected in the workflow
+
+The build jobs run code from every dependency (install scripts, Expo plugins, CocoaPods, Gradle
+plugins), so they get none of the store secrets above. Signing and uploading happen in separate
+jobs on fresh runners that run only fastlane and the JDK. iOS signs inside Xcode, so the
+certificate is imported before any dependency code runs, as a key that can sign but not be
+exported. Each secret goes to one step only, and passwords never appear on a command line.
+
+`check-workflow-secrets.mjs` enforces this in CI and before every release. If it fails after you
+edited a workflow, move the secret to the step that needs it rather than silencing the check.
+
+The build environment and Firebase files are the exception: the build needs them, so build code
+can read them. That is fine because they end up inside the app anyway. Never put a server
+secret in them.
+
 ## Before the first release
 
 1. App Store Connect: the app record exists for `@@ios.bundleId@@`. For the very first version,
@@ -75,9 +92,11 @@ files and hidden prompts straight to GitHub; each one is checked first. See what
 | --- | --- |
 | Gate: "not on main" | Tag a commit that is in `main` (merge first), delete and push the tag again |
 | Next build number: Google Play did not answer | Service account access, or the first `.aab` was never uploaded by hand |
-| iOS signing errors | `setup-secrets.sh ios`: certificate expired, or the profile does not include it |
+| CI or gate: `check-workflow-secrets` fails | A workflow edit gave a secret to a job-level `env`, a build step or a command line. Its message names the line and the fix |
+| iOS signing errors ("Prepare signing") | `setup-secrets.sh ios`: wrong `.p12` password, certificate expired, or the profile does not include it |
 | "Missing Compliance" / export compliance | Add `ITSAppUsesNonExemptEncryption` to Info.plist (Expo: `ios.config.usesNonExemptEncryption`) |
-| Android: "not signed with the upload key" | `ANDROID_KEYSTORE` holds a different key than Play expects; compare SHA-256 in Play Console -> App integrity |
+| Android: "not signed with the upload key" (`android-release`) | `ANDROID_KEYSTORE` or the alias is wrong; compare SHA-256 in Play Console -> App integrity |
+| Play: "upload key does not match" | `ANDROID_KEYSTORE` holds a different key than Play expects; compare SHA-256 in Play Console -> App integrity |
 | Play: "draft app" | Publish the first release in Play Console once; later ones go out by themselves |
 
 Re-run a failed release from the Actions tab (Re-run failed jobs). A build number that was

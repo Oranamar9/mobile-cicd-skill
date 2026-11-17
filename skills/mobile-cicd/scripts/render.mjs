@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TEMPLATES = path.join(SKILL_DIR, 'templates');
-const GENERATOR = 'mobile-cicd 0.1.0';
+const GENERATOR = 'mobile-cicd 0.2.0';
 
 const FILES = [
   { template: 'workflows/ci.yml', output: '.github/workflows/ci.yml' },
@@ -34,6 +34,7 @@ const FILES = [
   { template: 'Gemfile', output: 'Gemfile', gemfile: true },
   { template: 'mobile-cicd/set-versions.mjs', output: '.github/mobile-cicd/set-versions.mjs', mode: 0o755 },
   { template: 'mobile-cicd/check-store-access.mjs', output: '.github/mobile-cicd/check-store-access.mjs', mode: 0o755 },
+  { template: 'mobile-cicd/check-workflow-secrets.mjs', output: '.github/mobile-cicd/check-workflow-secrets.mjs', mode: 0o755 },
   { template: 'mobile-cicd/setup-secrets.sh', output: '.github/mobile-cicd/setup-secrets.sh', mode: 0o755 },
   { template: 'mobile-cicd/README.md', output: '.github/mobile-cicd/README.md' },
 ];

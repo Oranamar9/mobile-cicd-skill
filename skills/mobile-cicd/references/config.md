@@ -21,7 +21,7 @@ drafts it and `render.mjs` validates it. Unknown fields are ignored.
 | Field | Notes |
 | --- | --- |
 | `ci.lint`, `ci.format`, `ci.typecheck`, `ci.test`, `ci.build` | Full commands, or `null` to skip. Multi-line values are fine. |
-| `hooks.afterInstall` | Runs after the install in CI and in both release jobs. Use it for build prerequisites, e.g. compiling local Capacitor plugins. |
+| `hooks.afterInstall` | Runs after the install in CI and in both release build jobs. Use it for build prerequisites, e.g. compiling local Capacitor plugins. It never gets store secrets. |
 | `web.buildCommand` | Capacitor only: the build that runs before `npx cap sync` and must produce `web.webDir`. Apps that are also a website often have a separate mobile build (`build:mobile`); detect prefers it. |
 | `web.webDir` | Capacitor only, informational: the folder `cap sync` copies (from capacitor.config). |
 
@@ -48,7 +48,7 @@ merged file and diff on re-render).
 | `android.packageName` | `com.example.app` | Must match Play Console |
 | `android.dir` | `android` | |
 | `android.appGradle` | `android/app/build.gradle` | `versionCode` / `versionName` are rewritten here in committed projects; they must be literals |
-| `android.aab` | `android/app/build/outputs/bundle/release/app-release.aab` | |
+| `android.aab` | `android/app/build/outputs/bundle/release/app-release.aab` | Where Gradle writes the bundle; `android-build` copies it (with `mapping.txt` and native symbols) into the artifact that `android-release` signs |
 | `android.reactNativeArchitectures` | `null` or `"arm64-v8a,armeabi-v7a"` | React Native only. Fewer ABIs = much faster C++ builds; x86 builds serve only emulators and Chromebooks |
 
 ## Expo (prebuild only)

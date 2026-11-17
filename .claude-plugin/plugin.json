@@ -1,7 +1,7 @@
 {
   "name": "mobile-cicd",
   "description": "Complete GitHub Actions CI/CD for Capacitor, Expo and React Native apps: CI, security scans, and tag-driven releases to the App Store and Google Play, with guided store secrets.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": { "name": "The mobile-cicd authors" },
   "license": "MIT",
   "keywords": ["mobile", "ci", "cd", "github-actions", "fastlane", "app-store", "google-play", "capacitor", "expo", "react-native"]
