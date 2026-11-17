@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import { renderTemplate, validateConfig, deriveVars } from '../skills/mobile-cicd/scripts/render.mjs';
@@ -286,4 +286,53 @@ test('the build lane refuses to run with a store secret in its environment', () 
   const fastfile = render('fastlane/Fastfile', config());
   assert.match(fastfile, /lane :build do\n\s+ensure_no_store_secrets!/);
   for (const s of STORE_SECRETS) assert.ok(fastfile.includes(s), `Fastfile STORE_SECRETS lists ${s}`);
+});
+
+// ------------------------------------------------------------------ run through a symlink
+
+// The skill is usually installed as a symlink (~/.claude/skills/mobile-cicd -> a checkout). Node
+// resolves symlinks in import.meta.url but not in argv[1], and a "was I run directly?" check that
+// compared the two made both scripts exit 0 without doing anything.
+function linkedSkill(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mobile-cicd-link-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const skill = path.join(dir, 'skills/mobile-cicd');
+  fs.mkdirSync(path.dirname(skill), { recursive: true });
+  fs.symlinkSync(path.join(ROOT, 'skills/mobile-cicd'), skill, 'dir');
+  return { dir, skill };
+}
+const runNode = (args, cwd) => spawnSync(process.execPath, args, { cwd, encoding: 'utf8' });
+
+test('render.mjs and check-workflow-secrets.mjs do their work when run through a symlink', (t) => {
+  const { dir, skill } = linkedSkill(t);
+  const app = path.join(dir, 'app');
+  const out = path.join(dir, 'out');
+  fs.mkdirSync(path.join(app, '.github/mobile-cicd'), { recursive: true });
+  fs.writeFileSync(path.join(app, '.github/mobile-cicd/config.json'), JSON.stringify(config()));
+
+  const render = runNode([path.join(skill, 'scripts/render.mjs'), '--root', app, '--out', out]);
+  assert.equal(render.status, 0, render.stderr);
+  assert.match(render.stdout, /created\s+\.github\/workflows\/mobile-release\.yml/);
+  for (const f of ['ci.yml', 'security.yml', 'mobile-release.yml']) {
+    assert.ok(fs.existsSync(path.join(out, '.github/workflows', f)), `render wrote ${f}`);
+  }
+
+  const checker = path.join(skill, 'templates/mobile-cicd/check-workflow-secrets.mjs');
+  const pass = runNode([checker], out);
+  assert.equal(pass.status, 0, pass.stdout + pass.stderr);
+  assert.match(pass.stdout, /^No problems found in 3 workflow file\(s\): .*mobile-release\.yml/m);
+
+  const bad = path.join(out, '.github/workflows/mobile-release.yml');
+  fs.writeFileSync(bad, fs.readFileSync(bad, 'utf8').replace(/^jobs:\n/m, 'jobs:\n  leak:\n    runs-on: ubuntu-latest\n    env:\n      APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}\n    steps:\n      - run: echo hi\n'));
+  const fail = runNode([checker], out);
+  assert.equal(fail.status, 1, fail.stdout + fail.stderr);
+  assert.match(fail.stdout, /\[job-env\]/);
+});
+
+test('check-workflow-secrets.mjs fails when it finds no workflow to check', (t) => {
+  const { dir, skill } = linkedSkill(t);
+  const r = runNode([path.join(skill, 'templates/mobile-cicd/check-workflow-secrets.mjs')], dir);
+  assert.equal(r.status, 2, r.stdout + r.stderr);
+  assert.match(r.stderr, /No workflow files/);
+  assert.equal(r.stdout, '');
 });

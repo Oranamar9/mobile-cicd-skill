@@ -328,4 +328,15 @@ function main() {
   process.exit(left.length ? 3 : 0);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+// Run main() only when this file is the script node was started with, not when it is imported.
+// Compare real paths: node resolves symlinks in import.meta.url but not in argv[1], so a skill
+// installed as a symlink (~/.claude/skills/mobile-cicd -> ...) would otherwise exit 0 doing nothing.
+function isMain() {
+  try {
+    return fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isMain()) main();
